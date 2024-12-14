@@ -11,39 +11,40 @@ from AdbManager import adbManager, SwipeThread
 from SeDetector import seDetector
 from yolo import YOLO
 
-adbM = None
-PORT = 16384
-PACKAGE_NAME = "com.halfbrick.fruitninjafree"
-SCRCPY_PARAM = ["scrcpy-win64-v3.1/scrcpy.exe", "-m", "1280"]
-SWIPE_TIME = 0.02
-BOX_LIMIT = 5
-BOOM_PAD = 40
-SPLIT_RATE = 0.5
-BIAS_DOWN = 10
-BIAS_UP = 10
+# 系统控制参数
+adbM = None  # adb管理类
+PORT = 16384  # 模拟器端口
+PACKAGE_NAME = "com.halfbrick.fruitninjafree"  # 应用包名
+SCRCPY_PARAM = ["scrcpy-win64-v3.1/scrcpy.exe", "-m", "1280"]  # scrcpy启动参数
+SWIPE_TIME = 0.02  # 滑动时间
+BOX_LIMIT = 5  # 滑动box最大数量限制
+BOOM_PAD = 40  # 炸弹的危险外延距离
+SPLIT_RATE = 0.5  # 滑动偏移量改变的屏幕分割比例
+BIAS_DOWN = 10  # 屏幕下方滑动偏移
+BIAS_UP = 10  # 屏幕上方滑动偏移
 
-seD = None
-START_TEMPLATE_PATHS = [
+seD = None  # 开始结束检测类
+START_TEMPLATE_PATHS = [  # 开始模版路径
     "detect_img/start_0.jpg",
     "detect_img/start_1.jpg",
 ]
-END_TEMPLATE_PATHS = [
+END_TEMPLATE_PATHS = [  # 结束模版路径
     "detect_img/end_1.jpg",
     "detect_img/end_2.jpg",
 ]
-START_THRESHOLD = 0.8
-END_THRESHOLD = 0.65
+START_THRESHOLD = 0.8  # 开始模版置信阈值
+END_THRESHOLD = 0.65  # 结束模板置信阈值
 
-DEVICE_WIDTH = 1280
-DEVICE_HEIGHT = 720
+DEVICE_WIDTH = 1280  # 设备屏幕宽度
+DEVICE_HEIGHT = 720  # 设备屏幕高度
 
 yolo = YOLO()
-DRAW_ENABLE = False
+DRAW_ENABLE = True
 
 
 def init():
+    """系统初始化，创建检测器，检查设备是否在线，应用是否运行"""
     global adbM, seD
-
     seD = seDetector(START_TEMPLATE_PATHS, END_TEMPLATE_PATHS, START_THRESHOLD, END_THRESHOLD, DEVICE_WIDTH,
                      DEVICE_HEIGHT)
 
@@ -66,7 +67,8 @@ def main():
         adbM.start_ScrcpyProcess(SCRCPY_PARAM)
 
         yoloEnable = False
-
+        
+        # 维持屏幕比例
         def maintain_window():
             while True:
                 if adbM.scrcpy_window:
@@ -91,7 +93,8 @@ def main():
                     "mon": 0,
                 }
                 img = np.array(sct.grab(monitor))
-
+                
+                # 检测游戏开始/结束
                 deResult = seD.matchTemplate(img, not yoloEnable)
                 if deResult is not None:
                     if deResult == 1 and not yoloEnable:
@@ -102,13 +105,15 @@ def main():
                         yoloEnable = False
 
                 if yoloEnable and img is not None:
+                    # yolo目标检测
                     image = cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
                     image = Image.fromarray(image)
                     r_image, boxes = yolo.detect_image(image, drawEnable=DRAW_ENABLE)
+                    # 标注图片显示
                     if DRAW_ENABLE:
                         r_image_cv = cv2.cvtColor(np.array(r_image), cv2.COLOR_RGB2BGR)
                         cv2.imshow('Live Screen', r_image_cv)
-
+                    # 滑动路径计算
                     paths, boom = adbM.scrcpy_window.getPaths2(boxes, BOX_LIMIT, pad=BOOM_PAD, split=SPLIT_RATE,
                                                                d_down=BIAS_DOWN, d_up=BIAS_UP)
                     swipe_thread.update_paths(paths=paths, boom=boom)
@@ -116,6 +121,7 @@ def main():
                 if cv2.waitKey(25) & 0xFF == ord("q"):
                     cv2.destroyAllWindows()
                     break
+                    
         swipe_thread.stop()
         adbM.end_ScrcpyProcess()
 
